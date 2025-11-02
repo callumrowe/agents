@@ -5,13 +5,13 @@ volumes:
   qdrant_storage:
 
 networks:
-  demo:
-  proxy_default:
+  backend:
+  core:
     external: true
 
 x-n8n: &service-n8n
   image: n8nio/n8n:latest
-  networks: ['demo']
+  networks: ['backend']
   environment:
     - DB_TYPE=postgresdb
     - DB_POSTGRESDB_HOST=postgres
@@ -29,14 +29,14 @@ x-n8n: &service-n8n
 x-ollama: &service-ollama
   image: ollama/ollama:latest
   container_name: ollama
-  networks: ['demo']
+  networks: ['backend']
   restart: unless-stopped
   volumes:
     - ollama_storage:/root/.ollama
 
 x-init-ollama: &init-ollama
   image: ollama/ollama:latest
-  networks: ['demo']
+  networks: ['backend']
   container_name: ollama-pull-llama
   volumes:
     - ollama_storage:/root/.ollama
@@ -51,7 +51,7 @@ services:
   postgres:
     image: postgres:16-alpine
     hostname: postgres
-    networks: ['demo']
+    networks: ['backend']
     restart: unless-stopped
     environment:
       - POSTGRES_USER
@@ -84,14 +84,14 @@ services:
     hostname: n8n
     container_name: n8n
     restart: unless-stopped
-    networks: ['demo', 'proxy_default']
+    networks: ['backend', 'core']
     labels:
       - traefik.enable=true
       - traefik.http.routers.n8n.rule=Host(`${N8N_HOST}`)
       - traefik.http.routers.n8n.entrypoints=websecure
       - traefik.http.routers.n8n.tls.certresolver=letsencrypt
       - traefik.http.services.n8n.loadbalancer.server.port=5678
-      - traefik.docker.network=proxy_default
+      - traefik.docker.network=core
     volumes:
       - n8n_storage:/home/node/.n8n
       - ./n8n/demo-data:/demo-data
@@ -106,7 +106,7 @@ services:
     image: qdrant/qdrant
     hostname: qdrant
     container_name: qdrant
-    networks: ['demo', 'proxy_default']
+    networks: ['backend', 'core']
     restart: unless-stopped
     labels:
       - traefik.enable=true
@@ -114,33 +114,33 @@ services:
       - traefik.http.routers.qdrant.entrypoints=websecure
       - traefik.http.routers.qdrant.tls.certresolver=letsencrypt
       - traefik.http.services.qdrant.loadbalancer.server.port=6333
-      - traefik.docker.network=proxy_default
+      - traefik.docker.network=core
     volumes:
       - qdrant_storage:/qdrant/storage
 
   ollama-cpu:
     profiles: ["cpu"]
     <<: *service-ollama
-    networks: ['demo', 'proxy_default']
+    networks: ['backend', 'core']
     labels:
       - traefik.enable=true
       - traefik.http.routers.ollama.rule=Host(`${OLLAMA_PUBLIC_HOST}`)
       - traefik.http.routers.ollama.entrypoints=websecure
       - traefik.http.routers.ollama.tls.certresolver=letsencrypt
       - traefik.http.services.ollama.loadbalancer.server.port=11434
-      - traefik.docker.network=proxy_default
+      - traefik.docker.network=core
 
   ollama-gpu:
     profiles: ["gpu-nvidia"]
     <<: *service-ollama
-    networks: ['demo', 'proxy_default']
+    networks: ['backend', 'core']
     labels:
       - traefik.enable=true
       - traefik.http.routers.ollama.rule=Host(`${OLLAMA_PUBLIC_HOST}`)
       - traefik.http.routers.ollama.entrypoints=websecure
       - traefik.http.routers.ollama.tls.certresolver=letsencrypt
       - traefik.http.services.ollama.loadbalancer.server.port=11434
-      - traefik.docker.network=proxy_default
+      - traefik.docker.network=core
     deploy:
       resources:
         reservations:
@@ -153,14 +153,14 @@ services:
     profiles: ["gpu-amd"]
     <<: *service-ollama
     image: ollama/ollama:rocm
-    networks: ['demo', 'proxy_default']
+    networks: ['backend', 'core']
     labels:
       - traefik.enable=true
       - traefik.http.routers.ollama.rule=Host(`${OLLAMA_PUBLIC_HOST}`)
       - traefik.http.routers.ollama.entrypoints=websecure
       - traefik.http.routers.ollama.tls.certresolver=letsencrypt
       - traefik.http.services.ollama.loadbalancer.server.port=11434
-      - traefik.docker.network=proxy_default
+      - traefik.docker.network=core
     devices:
       - "/dev/kfd"
       - "/dev/dri"
